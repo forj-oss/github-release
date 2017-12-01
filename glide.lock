@@ -1,5 +1,5 @@
-hash: b0e13cad7edef48bfd7d9250342f87802730aae8232631310125235c91524216
-updated: 2017-11-28T21:18:26.938927137Z
+hash: 3a58d7e3596462bf07aca847c36528bac3e8a14388222b4e48bfd560a8059af6
+updated: 2017-12-01T13:34:54.688794484Z
 imports:
 - name: github.com/alecthomas/kingpin
   version: fde80b58ec35ea587c031c202880b1655a51ee53
@@ -9,6 +9,12 @@ imports:
   - parse
 - name: github.com/alecthomas/units
   version: 2efee857e7cfd4f3d0138cc3cbb1b4966962b93a
+- name: github.com/fatih/color
+  version: 5df930a27be2502f99b292b7cc09ebad4d0891f4
+- name: github.com/forj-oss/forjj-modules
+  version: 1b3239fb04428ea28686a23e6dd6974226837ebf
+  subpackages:
+  - trace
 - name: github.com/golang/protobuf
   version: 1e59b77b52bf8e4b449a57e6f79f21226d571845
   subpackages:
@@ -21,6 +27,12 @@ imports:
   version: 53e6ce116135b80d037921a7fdd5138cf32d7a8a
   subpackages:
   - query
+- name: github.com/mattn/go-colorable
+  version: 5411d3eea5978e6cdc258b30de592b60df6aba96
+  repo: https://github.com/mattn/go-colorable
+- name: github.com/mattn/go-isatty
+  version: 57fdcb988a5c543893cc61bce354a6e24ab70022
+  repo: https://github.com/mattn/go-isatty
 - name: golang.org/x/net
   version: 6921abc35dffd00438a0c020584ce560108737ea
   subpackages:
@@ -30,6 +42,11 @@ imports:
   version: f95fa95eaa936d9d87489b15d1d18b97c1ba9c28
   subpackages:
   - internal
+- name: golang.org/x/sys
+  version: e24f485414aeafb646f6fca458b0bf869c0880a1
+  repo: https://go.googlesource.com/sys
+  subpackages:
+  - unix
 - name: google.golang.org/appengine
   version: 9d8544a6b2c7df9cff240fcf92d7b2f59bc13416
   subpackages:

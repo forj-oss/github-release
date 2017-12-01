@@ -5,3 +5,6 @@ import:
   subpackages:
   - github
 - package: golang.org/x/oauth2
+- package: github.com/forj-oss/forjj-modules
+  subpackages:
+  - trace
