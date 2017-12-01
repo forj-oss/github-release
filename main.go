@@ -38,7 +38,7 @@ func (a *GithubReleaseApp) do_release() {
 		os.Exit(1)
 	}
 
-	fmt.Print("Done")
+	fmt.Print("Done.\n")
 }
 
 func (a *GithubReleaseApp) do_delete() {
