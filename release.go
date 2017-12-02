@@ -8,12 +8,49 @@ import (
 	"net/url"
 	"strings"
 	"github.com/forj-oss/forjj-modules/trace"
+	"net/http/httptrace"
+	"net/http"
+	"net/http/httputil"
 )
+
+// transport is an http.RoundTripper that keeps track of the in-flight
+// request and implements hooks to report HTTP tracing events.
+type transport struct {
+    current *http.Request
+	transport http.RoundTripper
+}
+
+// RoundTrip wraps http.DefaultTransport.RoundTrip to keep track
+// of the current request.
+func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
+    t.current = req
+    return t.transport.RoundTrip(req)
+}
+
+// GotConn prints whether the connection has been used previously
+// for the current request.
+func (t *transport) GotConn(httptrace.GotConnInfo) {
+	if b, err := httputil.DumpRequest(t.current, true) ; err == nil {
+		gotrace.Trace(string(b))
+	} else {
+		gotrace.Trace("Unable to dump request. %s", err)
+	}
+
+}
 
 func (a *GithubReleaseApp) github_connect(connect ConnectStruct) (err error) {
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: *connect.Token})
 	a.ctxt = context.Background()
 	tc := oauth2.NewClient(a.ctxt, ts)
+
+	t := &transport{ transport: tc.Transport }
+
+	trace := &httptrace.ClientTrace{
+		GotConn: t.GotConn,
+	}
+	a.ctxt = httptrace.WithClientTrace(a.ctxt, trace)
+
+	tc.Transport = t
 
 	a.Client = github.NewClient(tc)
 
