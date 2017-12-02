@@ -51,6 +51,7 @@ func (a *GithubReleaseApp) do_delete() {
 
 	if found, err := a.search_release(a.Delete.RepoStruct) ; err != nil {
 		gotrace.Error("Unable to delete a release. %s\n", err)
+		os.Exit(1)
 	} else {
 		if ! found {
 			gotrace.Warning("No release found for tag '%s'", *a.Delete.tag)
@@ -59,6 +60,7 @@ func (a *GithubReleaseApp) do_delete() {
 
 	if err := a.delete_release() ; err != nil {
 		gotrace.Error("Unable to create/update a release. %s\n", err)
+		os.Exit(1)
 	}
 
 	gotrace.Info("Done.\n")
