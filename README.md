@@ -129,4 +129,22 @@ $ go build
 
 To be simple: Create a Pull Request!
 
+To debug, you can set a shell variable `GOTRACE` to `true`/`debug`/`<debug level number>`
+
+Ex:
+```bash
+GOTRACE=1 ./github-release release ...
+```
+
+if you set GOTRACE to `true` or `debug`, the debug level will be set to 0
+
+If you want to see more detailled debug output, set the level number
+in GOTRACE.
+
+At level 0:
+- Show usual program activity trace.
+
+At Level 1:
+- github-release shows REST API calls against github.
+
 Forj team

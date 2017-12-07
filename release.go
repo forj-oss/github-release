@@ -7,12 +7,53 @@ import (
 	"golang.org/x/oauth2"
 	"net/url"
 	"strings"
+	"github.com/forj-oss/forjj-modules/trace"
+	"net/http"
+	"net/http/httputil"
+	"regexp"
 )
+
+// transport is an http.RoundTripper that keeps track of the in-flight
+// request and implements hooks to report HTTP tracing events.
+type transport struct {
+    current_req *http.Request
+	current_resp *http.Response
+	transport http.RoundTripper
+}
+
+// RoundTrip wraps http.DefaultTransport.RoundTrip to keep track
+// of the current request.
+func (t *transport) RoundTrip(req *http.Request) (_ *http.Response, err error) {
+    t.current_req = req
+	if b, err := httputil.DumpRequest(t.current_req, true) ; err == nil {
+		gotrace.Trace("REQUEST:\n%s", string(b))
+	} else {
+		gotrace.Trace("Unable to dump request. %s", err)
+	}
+    t.current_resp, err = t.transport.RoundTrip(req)
+	if t.current_resp == nil && err != nil {
+		return nil, err
+	}
+	if b, err := httputil.DumpResponse(t.current_resp, true) ; err == nil {
+		gotrace.Trace("RESPONSE:\n%s", string(b))
+	} else {
+		gotrace.Trace("Unable to dump request. %s", err)
+	}
+	return t.current_resp, err
+}
 
 func (a *GithubReleaseApp) github_connect(connect ConnectStruct) (err error) {
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: *connect.Token})
 	a.ctxt = context.Background()
 	tc := oauth2.NewClient(a.ctxt, ts)
+
+	if gotrace.IsDebugLevelMode(1) {
+		// http trace injection start here
+		t := &transport{ transport: tc.Transport }
+
+		tc.Transport = t
+		// http trace stop here
+	}
 
 	a.Client = github.NewClient(tc)
 
@@ -21,12 +62,17 @@ func (a *GithubReleaseApp) github_connect(connect ConnectStruct) (err error) {
 		return
 	}
 
-	fmt.Printf("Github API URL used : %s\n", a.Client.BaseURL)
+	if found, _ := regexp.MatchString("^https$", a.Client.BaseURL.Scheme) ; ! found {
+		gotrace.Warning("THe API URL is not secured and github-release may fail if github requires to redirect (301) " +
+			"to the https protocol.")
+	}
+
+	gotrace.Info("Github API URL used : %s\n", a.Client.BaseURL)
 
 	if user, _, err := a.Client.Users.Get(a.ctxt, ""); err != nil {
 		return fmt.Errorf("Unable to get the owner of the token given. %s", err)
 	} else {
-		fmt.Printf("Connection successful. Token given by user '%s'\n", *user.Login)
+		gotrace.Info("Connection successful. Token given by user '%s'\n", *user.Login)
 	}
 
 	return
@@ -35,6 +81,7 @@ func (a *GithubReleaseApp) github_connect(connect ConnectStruct) (err error) {
 func (a *GithubReleaseApp) search_tag(repo RepoStruct) (found bool, _ error) {
 	var tags []string
 
+	gotrace.Trace("List tags for %s/%s.", *repo.Org, *repo.Repo)
 	if github_tags, resp, err := a.Client.Repositories.ListTags(a.ctxt, *repo.Org, *repo.Repo, nil); err != nil && resp == nil {
 		return false, fmt.Errorf("Tags not found in %s/%s. %s", repo.Org, *repo.Repo, err)
 	} else if resp.StatusCode != 200 {
@@ -42,6 +89,7 @@ func (a *GithubReleaseApp) search_tag(repo RepoStruct) (found bool, _ error) {
 	} else {
 		tags = make([]string, len(github_tags))
 		tag_num := 0
+		gotrace.Trace("Found %d tags.", len(github_tags))
 		for _, github_tag := range github_tags {
 			if *github_tag.Name == *repo.tag {
 				found = true
@@ -54,43 +102,46 @@ func (a *GithubReleaseApp) search_tag(repo RepoStruct) (found bool, _ error) {
 	if !found {
 		return false, fmt.Errorf("Tag '%s' not found! Valid tags are '%s'", *repo.tag, strings.Join(tags, "', '"))
 	}
+	gotrace.Trace("Found '%s' tag.", *repo.tag)
 	return
 }
 
 func (a *GithubReleaseApp) search_release(repo RepoStruct) (_ bool, _ error) {
 	// Needs to get all releases (even drafted one, ie not published)
+	gotrace.Trace("List releases for %s/%s.", *repo.Org, *repo.Repo)
 	if rels, resp, err := a.Client.Repositories.ListReleases(a.ctxt, *repo.Org, *repo.Repo, nil) ; err != nil && resp == nil {
 		return false, fmt.Errorf("Unable to get the releases. %s", err)
 	} else if resp.StatusCode != 200 {
 		return false, fmt.Errorf("Unable to get the releases. %s", resp.Status)
 	} else {
+		gotrace.Trace("Found %d release(s).", len(rels))
 		for _, rel := range rels {
 			if *rel.TagName == *repo.tag {
 				a.release = rel
+				gotrace.Trace("Found '%s' release.", *repo.tag)
 				return true, nil
 			}
 		}
+		gotrace.Trace("'%s' release not found.", *repo.tag)
 		return false, nil
 	}
 }
 
-func (a *GithubReleaseApp) manage_release() (err error) {
+func (a *GithubReleaseApp) manage_release() (error) {
 	if found, err := a.search_release(a.Manage.RepoStruct) ; err != nil {
 		return err
+	} else if found {
+		return a.update_release()
 	} else {
-		if found {
-			err = a.update_release()
-		} else {
-			err = a.create_release()
-		}
+		return a.create_release()
 	}
-	return
 }
 
 func (a *GithubReleaseApp) delete_release() (_ error) {
 	if a.release == nil {
 		return fmt.Errorf("Internal issue. Release object is nil.")
 	}
+	gotrace.Trace("Start 'delete release'")
 
 	release_status := ReleaseStatus(*a.release.Draft, *a.release.Prerelease)
 
@@ -107,6 +158,7 @@ func (a *GithubReleaseApp) update_release() (_ error) {
 	if a.release == nil {
 		return fmt.Errorf("Internal issue. Release object is nil.")
 	}
+	gotrace.Trace("Start 'update release'")
 	dirty := false
 
 	if *a.Manage.name != "" && *a.Manage.name != *a.release.Name {
@@ -129,6 +181,7 @@ func (a *GithubReleaseApp) update_release() (_ error) {
 	release_status := ReleaseStatus(*a.release.Draft, *a.release.Prerelease)
 
 	if dirty {
+		gotrace.Trace("EditRelease %s/%s ID: %d", *a.Manage.Org, *a.Manage.Repo, *a.release.ID)
 		if rel, resp, err := a.Client.Repositories.EditRelease(a.ctxt, *a.Manage.Org, *a.Manage.Repo, *a.release.ID, a.release) ; err != nil && resp == nil {
 			return fmt.Errorf("Unable to update %s '%s'. %s", release_status, *a.release.TagName, err)
 		} else if resp.StatusCode != 200 {
@@ -144,6 +197,8 @@ func (a *GithubReleaseApp) update_release() (_ error) {
 }
 
 func (a *GithubReleaseApp) create_release() (_ error) {
+	gotrace.Trace("Start 'create release'")
+
 	var release github.RepositoryRelease = github.RepositoryRelease{
 		TagName   : a.Manage.tag,
 		Draft     : a.Manage.IsDraft,
@@ -161,7 +216,7 @@ func (a *GithubReleaseApp) create_release() (_ error) {
 
 	release_status := ReleaseStatus(*release.Draft, *release.Prerelease)
 
-
+	gotrace.Trace("CreateRelease at %s/%s", *a.Manage.Org, *a.Manage.Repo)
 	if rel, resp, err := a.Client.Repositories.CreateRelease(a.ctxt, *a.Manage.Org, *a.Manage.Repo, &release) ; err != nil && resp == nil {
 		return fmt.Errorf("Unable to create %s '%s'. %s", release_status, *release.TagName, err)
 	} else if resp.StatusCode != 201 {
