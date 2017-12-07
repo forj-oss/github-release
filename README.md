@@ -129,4 +129,11 @@ $ go build
 
 To be simple: Create a Pull Request!
 
+To debug, you can set a shell variable `GOTRACE` to `true`/`debug`/`<debug level number>`
+
+Ex:
+```bash
+GOTRACE=1 ./github-release release ...
+```
+
 Forj team

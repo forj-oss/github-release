@@ -47,12 +47,13 @@ func (a *GithubReleaseApp) github_connect(connect ConnectStruct) (err error) {
 	a.ctxt = context.Background()
 	tc := oauth2.NewClient(a.ctxt, ts)
 
-	// http trace injection start here
-	// TODO: disable this when debug mode is disabled.
-	t := &transport{ transport: tc.Transport }
+	if gotrace.IsDebugLevelMode(1) {
+		// http trace injection start here
+		t := &transport{ transport: tc.Transport }
 
-	tc.Transport = t
-	// http trace stop here
+		tc.Transport = t
+		// http trace stop here
+	}
 
 	a.Client = github.NewClient(tc)
 
