@@ -8,34 +8,38 @@ import (
 	"net/url"
 	"strings"
 	"github.com/forj-oss/forjj-modules/trace"
-	"net/http/httptrace"
 	"net/http"
 	"net/http/httputil"
+	"regexp"
 )
 
 // transport is an http.RoundTripper that keeps track of the in-flight
 // request and implements hooks to report HTTP tracing events.
 type transport struct {
-    current *http.Request
+    current_req *http.Request
+	current_resp *http.Response
 	transport http.RoundTripper
 }
 
 // RoundTrip wraps http.DefaultTransport.RoundTrip to keep track
 // of the current request.
-func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
-    t.current = req
-    return t.transport.RoundTrip(req)
-}
-
-// GotConn prints whether the connection has been used previously
-// for the current request.
-func (t *transport) GotConn(httptrace.GotConnInfo) {
-	if b, err := httputil.DumpRequest(t.current, true) ; err == nil {
-		gotrace.Trace(string(b))
+func (t *transport) RoundTrip(req *http.Request) (_ *http.Response, err error) {
+    t.current_req = req
+	if b, err := httputil.DumpRequest(t.current_req, true) ; err == nil {
+		gotrace.Trace("REQUEST:\n%s", string(b))
 	} else {
 		gotrace.Trace("Unable to dump request. %s", err)
 	}
-
+    t.current_resp, err = t.transport.RoundTrip(req)
+	if t.current_resp == nil && err != nil {
+		return nil, err
+	}
+	if b, err := httputil.DumpResponse(t.current_resp, true) ; err == nil {
+		gotrace.Trace("RESPONSE:\n%s", string(b))
+	} else {
+		gotrace.Trace("Unable to dump request. %s", err)
+	}
+	return t.current_resp, err
 }
 
 func (a *GithubReleaseApp) github_connect(connect ConnectStruct) (err error) {
@@ -43,20 +47,23 @@ func (a *GithubReleaseApp) github_connect(connect ConnectStruct) (err error) {
 	a.ctxt = context.Background()
 	tc := oauth2.NewClient(a.ctxt, ts)
 
+	// http trace injection start here
+	// TODO: disable this when debug mode is disabled.
 	t := &transport{ transport: tc.Transport }
 
-	trace := &httptrace.ClientTrace{
-		GotConn: t.GotConn,
-	}
-	a.ctxt = httptrace.WithClientTrace(a.ctxt, trace)
-
 	tc.Transport = t
+	// http trace stop here
 
 	a.Client = github.NewClient(tc)
 
 	a.Client.BaseURL, err = url.Parse(*connect.api_uri)
 	if err != nil {
 		return
+	}
+
+	if found, _ := regexp.MatchString("^https$", a.Client.BaseURL.Scheme) ; ! found {
+		gotrace.Warning("THe API URL is not secured and github-release may fail if github requires to redirect (301) " +
+			"to the https protocol.")
 	}
 
 	gotrace.Info("Github API URL used : %s\n", a.Client.BaseURL)
