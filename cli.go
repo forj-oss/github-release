@@ -7,41 +7,44 @@ import (
 )
 
 type ConnectStruct struct {
-	Token        *string
-	api_uri      *string
-
+	Token   *string
+	api_uri *string
 }
 
 type RepoStruct struct {
-	Org          *string
-	Repo         *string
-	tag          *string
-
+	Org  *string
+	Repo *string
+	tag  *string
 }
 
 type ManageReleaseCmd struct {
-	Cmd          *kingpin.CmdClause
+	Cmd *kingpin.CmdClause
 	ConnectStruct
 	RepoStruct
 	name         *string
 	IsDraft      *bool
 	IsPreRelease *bool
 	desc         *string
-
 }
 
-type DeleteReleaseCmd struct {
-	Cmd     *kingpin.CmdClause
+type HasReleaseCmd struct {
+	Cmd *kingpin.CmdClause
 	ConnectStruct
 	RepoStruct
 }
 
+type DeleteReleaseCmd struct {
+	Cmd *kingpin.CmdClause
+	ConnectStruct
+	RepoStruct
+}
 
 type GithubReleaseApp struct {
 	App *kingpin.Application
 
-	Manage ManageReleaseCmd
-	Delete DeleteReleaseCmd
+	Manage     ManageReleaseCmd
+	HasRelease HasReleaseCmd
+	Delete     DeleteReleaseCmd
 
 	Client *github.Client
 	ctxt   context.Context
@@ -68,6 +71,16 @@ func (a *GithubReleaseApp) init() {
 	a.Manage.IsDraft = a.Manage.Cmd.Flag("draft", "To set release as Draft.").Bool()
 	a.Manage.IsPreRelease = a.Manage.Cmd.Flag("pre-release", "to set release as pre-release").Bool()
 	a.Manage.desc = a.Manage.Cmd.Flag("description", "Release description").String()
+
+	// ----------------- Has release
+	a.HasRelease.Cmd = a.App.Command("has-release", "return 0 if a github release is found. 1 otherwise.")
+
+	a.HasRelease.Token = a.HasRelease.Cmd.Flag("github-token", "github token with release access").Required().Envar("GITHUB_TOKEN").String()
+	a.HasRelease.api_uri = a.HasRelease.Cmd.Flag("github-api-uri", "Github API end point. For github Entreprise use "+
+		"https://<server>/api/v3/").Envar("GITHUB_API").Default("https://api.github.com/").String()
+	a.HasRelease.Org = a.HasRelease.Cmd.Flag("github-user", "User or Organization name").Short('u').Required().Envar("GITHUB_USER").String()
+	a.HasRelease.Repo = a.HasRelease.Cmd.Flag("github-repo", "Github Repository name.").Short('r').Required().Envar("GITHUB_REPO").String()
+	a.HasRelease.tag = a.HasRelease.Cmd.Arg("tag", "Tag name to use for release.").Required().String()
 
 	// ----------------- Delete
 	a.Delete.Cmd = a.App.Command("delete", "delete a github release")

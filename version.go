@@ -10,7 +10,7 @@ var (
 )
 
 const (
-	PRERELEASE = true
+	PRERELEASE = false
 	VERSION    = "1.0.3"
 	APP        = "github_release"
 )
