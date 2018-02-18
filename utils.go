@@ -15,10 +15,9 @@ func ReleaseStatus(draft, pre_release bool) (release_status string) {
 	return
 }
 
-func Capitalize(input string) (string) {
+func Capitalize(input string) string {
 	output := []rune(input)
 	output[0] = unicode.ToTitle(output[0])
 
 	return string(output)
 }
-
